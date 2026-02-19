@@ -6,11 +6,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for SurrealDBSdkClient that don't require the native SurrealDB SDK driver.
- * Tests verify state machine behavior (connected/disconnected) and error paths.
- *
- * <p>Integration tests with a real SurrealDB instance via Testcontainers
- * are in a separate IT class (Phase 4).</p>
+ * Unit tests for SurrealDBSdkClient state machine behavior.
+ * Tests verify connected/disconnected states and error paths without a live SurrealDB.
  */
 class SurrealDBSdkClientTest {
 
@@ -19,17 +16,6 @@ class SurrealDBSdkClientTest {
     @BeforeEach
     void setUp() {
         client = new SurrealDBSdkClient();
-    }
-
-    private ConnectionConfig testConfig() {
-        return ConnectionConfig.builder()
-                .host("localhost")
-                .port(8000)
-                .namespace("test_ns")
-                .database("test_db")
-                .username("user")
-                .password("pass")
-                .build();
     }
 
     @Test
@@ -56,6 +42,19 @@ class SurrealDBSdkClientTest {
     }
 
     @Test
+    void queryAsJsonThrowsWhenNotConnected() {
+        assertThrows(SurrealDBConnectionException.class, () ->
+                client.queryAsJson("SELECT 1"));
+    }
+
+    @Test
+    void queryBindAsJsonThrowsWhenNotConnected() {
+        assertThrows(SurrealDBConnectionException.class, () ->
+                client.queryBindAsJson("SELECT * FROM t WHERE name = $name",
+                        java.util.Map.of("name", "test")));
+    }
+
+    @Test
     void isHealthyFalseWhenNotConnected() {
         assertFalse(client.isHealthy());
     }
@@ -64,18 +63,5 @@ class SurrealDBSdkClientTest {
     void closeOnDisconnectedClientIsNoop() {
         assertDoesNotThrow(() -> client.close());
         assertFalse(client.isConnected());
-    }
-
-    @Test
-    void authManagerIsAccessible() {
-        assertNotNull(client.getAuthManager());
-    }
-
-    @Test
-    void constructorWithCustomAuthManager() {
-        AuthManager customAuth = new AuthManager();
-        SurrealDBSdkClient customClient = new SurrealDBSdkClient(customAuth);
-
-        assertSame(customAuth, customClient.getAuthManager());
     }
 }
