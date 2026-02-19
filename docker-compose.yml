@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:v2.2.1
+    ports:
+      - "8000:8000"
+    command: start --user root --pass root --bind 0.0.0.0:8000 file:/data/surreal.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./docker/data:/data
+    restart: unless-stopped
+
+  geoserver:
+    image: kartoza/geoserver:2.28.0
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./target/gt-surrealdb-1.0.0-SNAPSHOT.jar:/opt/geoserver/data_dir/../../webapps/geoserver/WEB-INF/lib/gt-surrealdb.jar
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+    restart: unless-stopped
