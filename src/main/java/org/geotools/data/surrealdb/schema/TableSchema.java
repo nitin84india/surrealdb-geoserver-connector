@@ -50,6 +50,18 @@ public final class TableSchema {
     }
 
     /**
+     * Looks up a field by name.
+     *
+     * @param name the field name to look up
+     * @return the matching FieldSchema, or null if not found
+     */
+    public FieldSchema getFieldByName(String name) {
+        return fields.stream()
+                .filter(f -> f.getFieldName().equals(name))
+                .findFirst().orElse(null);
+    }
+
+    /**
      * Returns the subset of fields whose SurrealDB kind represents a geometry type.
      * A field is considered a geometry field if its surrealKind starts with "geometry".
      *

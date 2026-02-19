@@ -42,6 +42,19 @@ public final class GeometryFieldDetector {
     }
 
     /**
+     * Returns true if the given SurrealDB kind string represents a record reference type.
+     * A kind is considered a record type if it is non-null and starts with "record" (case-sensitive).
+     * Also recognizes option-wrapped record types like "option&lt;record&lt;species&gt;&gt;".
+     *
+     * @param kind the SurrealDB field kind string, may be null
+     * @return true if the kind represents a record type
+     */
+    public static boolean isRecordKind(String kind) {
+        String unwrapped = unwrapOption(kind);
+        return unwrapped != null && unwrapped.startsWith("record");
+    }
+
+    /**
      * Returns true if the given SurrealDB kind string represents a geometry type.
      * A kind is considered geometry if it is non-null and starts with "geometry" (case-sensitive).
      * Also recognizes option-wrapped geometry types like "option&lt;geometry&lt;point&gt;&gt;".

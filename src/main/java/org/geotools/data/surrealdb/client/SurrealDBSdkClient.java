@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.surrealdb.Response;
+import org.geotools.data.surrealdb.filter.RecordId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -312,6 +313,9 @@ public class SurrealDBSdkClient implements SurrealDBClient {
     private String toSurrealQLLiteral(Object value) {
         if (value == null) {
             return "NONE";
+        }
+        if (value instanceof RecordId) {
+            return ((RecordId) value).getValue();
         }
         if (value instanceof String) {
             return "'" + ((String) value).replace("'", "\\'") + "'";

@@ -54,6 +54,43 @@ class GeometryFieldDetectorTest {
         assertFalse(GeometryFieldDetector.isGeometryKind(null));
     }
 
+    // --- isRecordKind tests ---
+
+    @Test
+    void isRecordKindReturnsTrueForBareRecord() {
+        assertTrue(GeometryFieldDetector.isRecordKind("record"));
+    }
+
+    @Test
+    void isRecordKindReturnsTrueForParameterizedRecord() {
+        assertTrue(GeometryFieldDetector.isRecordKind("record<species>"));
+    }
+
+    @Test
+    void isRecordKindReturnsTrueForOptionRecord() {
+        assertTrue(GeometryFieldDetector.isRecordKind("option<record<person>>"));
+    }
+
+    @Test
+    void isRecordKindReturnsFalseForString() {
+        assertFalse(GeometryFieldDetector.isRecordKind("string"));
+    }
+
+    @Test
+    void isRecordKindReturnsFalseForGeometryPoint() {
+        assertFalse(GeometryFieldDetector.isRecordKind("geometry<point>"));
+    }
+
+    @Test
+    void isRecordKindReturnsFalseForInt() {
+        assertFalse(GeometryFieldDetector.isRecordKind("int"));
+    }
+
+    @Test
+    void isRecordKindReturnsFalseForNull() {
+        assertFalse(GeometryFieldDetector.isRecordKind(null));
+    }
+
     // --- mapGeometryBinding tests ---
 
     @Test

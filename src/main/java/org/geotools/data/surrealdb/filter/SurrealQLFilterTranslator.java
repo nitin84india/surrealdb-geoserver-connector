@@ -24,6 +24,7 @@ import org.geotools.api.filter.spatial.Disjoint;
 import org.geotools.api.filter.spatial.Intersects;
 import org.geotools.api.filter.spatial.Within;
 import org.geotools.data.surrealdb.geometry.JtsToGeoJsonConverter;
+import org.geotools.data.surrealdb.schema.FieldSchema;
 import org.geotools.data.surrealdb.schema.GeometryFieldDetector;
 import org.geotools.data.surrealdb.schema.TableSchema;
 import org.locationtech.jts.geom.Envelope;
@@ -231,6 +232,14 @@ public class SurrealQLFilterTranslator {
         if (propertyName == null || value == null) {
             LOG.warn("Could not extract property/value from comparison filter, degrading to INCLUDE");
             return TranslationResult.INCLUDE;
+        }
+
+        // Wrap string values for record<X> fields as RecordId so they are emitted unquoted
+        if (value instanceof String && schema != null) {
+            FieldSchema fieldSchema = schema.getFieldByName(propertyName);
+            if (fieldSchema != null && GeometryFieldDetector.isRecordKind(fieldSchema.getSurrealKind())) {
+                value = new RecordId((String) value);
+            }
         }
 
         String paramName = nextParam();
