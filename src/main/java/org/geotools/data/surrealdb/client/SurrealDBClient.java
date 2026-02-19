@@ -58,6 +58,18 @@ public interface SurrealDBClient extends Closeable {
     Response queryBind(String surrealQL, Map<String, Object> params);
 
     /**
+     * Executes a parameterized SurrealQL query and returns the result as a JSON string.
+     * Combines the parameterization of {@link #queryBind} with the JSON decoupling of {@link #queryAsJson}.
+     *
+     * @param surrealQL the query string with $param placeholders
+     * @param params    parameter bindings
+     * @return the query result as a JSON string
+     * @throws SurrealDBQueryException if the query fails
+     * @throws SurrealDBConnectionException if not connected
+     */
+    String queryBindAsJson(String surrealQL, Map<String, Object> params);
+
+    /**
      * @return the current connection configuration, or null if not connected
      */
     ConnectionConfig getConfig();

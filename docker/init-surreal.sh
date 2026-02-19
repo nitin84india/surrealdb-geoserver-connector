@@ -17,22 +17,50 @@ DEFINE TABLE poi SCHEMAFULL;
 
 DEFINE FIELD name ON poi TYPE string;
 DEFINE FIELD geometry ON poi TYPE geometry<point>;
-DEFINE FIELD category ON poi TYPE string;
+DEFINE FIELD category ON poi TYPE option<string>;
+DEFINE FIELD rating ON poi TYPE option<float>;
 
 CREATE poi SET
   name = "Central Park",
   geometry = {"type":"Point","coordinates":[-73.9654,40.7829]},
-  category = "park";
+  category = "park",
+  rating = 4.8;
 
 CREATE poi SET
   name = "Times Square",
   geometry = {"type":"Point","coordinates":[-73.9855,40.7580]},
-  category = "landmark";
+  category = "landmark",
+  rating = 4.2;
 
 CREATE poi SET
   name = "Brooklyn Bridge",
   geometry = {"type":"Point","coordinates":[-73.9969,40.7061]},
-  category = "bridge";
+  category = "bridge",
+  rating = 4.6;
+
+CREATE poi SET
+  name = "Statue of Liberty",
+  geometry = {"type":"Point","coordinates":[-74.0445,40.6892]},
+  category = "landmark",
+  rating = 4.9;
+
+CREATE poi SET
+  name = "Los Angeles Convention Center",
+  geometry = {"type":"Point","coordinates":[-118.2695,34.0407]},
+  category = "venue",
+  rating = 3.5;
+
+CREATE poi SET
+  name = "Golden Gate Bridge",
+  geometry = {"type":"Point","coordinates":[-122.4783,37.8199]},
+  category = "bridge",
+  rating = 4.7;
+
+CREATE poi SET
+  name = "Unnamed Spot",
+  geometry = {"type":"Point","coordinates":[-73.9500,40.7500]},
+  category = NONE,
+  rating = NONE;
 
 DEFINE TABLE park SCHEMAFULL;
 DEFINE FIELD name ON park TYPE string;
