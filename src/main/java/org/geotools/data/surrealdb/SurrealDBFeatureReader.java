@@ -153,6 +153,11 @@ public class SurrealDBFeatureReader implements FeatureReader<SimpleFeatureType, 
             return null;
         }
 
+        // JsonObject/JsonArray cannot use getAsString() — serialize to JSON string
+        if (value.isJsonObject() || value.isJsonArray()) {
+            return value.toString();
+        }
+
         try {
             if (binding == String.class) {
                 return value.getAsString();
@@ -174,7 +179,7 @@ public class SurrealDBFeatureReader implements FeatureReader<SimpleFeatureType, 
             }
         } catch (Exception e) {
             LOG.debug("Failed to coerce value '{}' to {}: {}", value, binding.getSimpleName(), e.getMessage());
-            return value.getAsString();
+            return value.toString();
         }
     }
 }
