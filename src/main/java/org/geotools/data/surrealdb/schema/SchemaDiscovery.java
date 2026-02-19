@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -19,22 +20,26 @@ import java.util.stream.Collectors;
  * Executes INFO FOR DB and INFO FOR TABLE queries to introspect
  * database structure and map it to {@link TableSchema} value objects.
  *
- * <p>Only SCHEMAFULL tables with geometry fields are exposed to GeoServer.</p>
+ * <p>Tables with at least one geometry field are exposed to GeoServer,
+ * regardless of whether they are SCHEMAFULL or SCHEMALESS.</p>
  */
 public class SchemaDiscovery {
 
     private static final Logger LOG = LoggerFactory.getLogger(SchemaDiscovery.class);
 
     private final SurrealDBClient client;
+    private final Map<String, Boolean> tableSchemaModes = new HashMap<>();
 
     public SchemaDiscovery(SurrealDBClient client) {
         this.client = client;
     }
 
     /**
-     * Discovers all SCHEMAFULL table names in the current database.
+     * Discovers all table names in the current database.
+     * Both SCHEMAFULL and SCHEMALESS tables are included; geometry filtering
+     * happens later in {@link #discoverGeometryTables()}.
      *
-     * @return list of SCHEMAFULL table names
+     * @return list of all table names
      */
     public List<String> discoverTables() {
         LOG.debug("Discovering tables via INFO FOR DB");
@@ -49,20 +54,19 @@ public class SchemaDiscovery {
             return Collections.emptyList();
         }
 
-        List<String> schemafullTables = new ArrayList<>();
+        List<String> allTables = new ArrayList<>();
         for (Map.Entry<String, JsonElement> entry : tables.entrySet()) {
             String tableName = entry.getKey();
             String definition = entry.getValue().getAsString();
+            boolean isSchemafull = definition.contains("SCHEMAFULL");
 
-            if (definition.contains("SCHEMAFULL")) {
-                schemafullTables.add(tableName);
-                LOG.debug("Found SCHEMAFULL table: {}", tableName);
-            } else {
-                LOG.debug("Skipping non-SCHEMAFULL table: {}", tableName);
-            }
+            tableSchemaModes.put(tableName, isSchemafull);
+            allTables.add(tableName);
+            LOG.debug("Found table: {} ({})", tableName,
+                    isSchemafull ? "SCHEMAFULL" : "SCHEMALESS");
         }
 
-        return schemafullTables;
+        return allTables;
     }
 
     /**
@@ -83,6 +87,13 @@ public class SchemaDiscovery {
         if (fields != null) {
             for (Map.Entry<String, JsonElement> entry : fields.entrySet()) {
                 String fieldName = entry.getKey();
+
+                // Skip sub-field definitions (e.g., "address.city", "photos.*")
+                if (fieldName.contains(".")) {
+                    LOG.debug("  Skipping sub-field '{}'", fieldName);
+                    continue;
+                }
+
                 String fieldDefinition = entry.getValue().getAsString();
                 String kind = extractFieldKind(fieldDefinition);
 
@@ -90,16 +101,18 @@ public class SchemaDiscovery {
                     fieldSchemas.add(new FieldSchema(fieldName, kind));
                     LOG.debug("  Field '{}' kind: {}", fieldName, kind);
                 } else {
-                    LOG.warn("  Could not determine kind for field '{}': {}", fieldName, fieldDefinition);
+                    LOG.debug("  Skipping field '{}' with no TYPE: {}", fieldName, fieldDefinition);
                 }
             }
         }
 
-        return new TableSchema(tableName, fieldSchemas, true);
+        boolean schemafull = tableSchemaModes.getOrDefault(tableName, false);
+        return new TableSchema(tableName, fieldSchemas, schemafull);
     }
 
     /**
-     * Discovers all SCHEMAFULL tables that contain at least one geometry field.
+     * Discovers all tables that contain at least one geometry field.
+     * Both SCHEMAFULL and SCHEMALESS tables are considered.
      *
      * @return list of table schemas with geometry fields
      */

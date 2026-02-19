@@ -38,8 +38,8 @@ class SurrealDBSchemaDiscoveryIT extends SurrealDBContainerIT {
     }
 
     @Test
-    @DisplayName("discoverTables() returns only SCHEMAFULL tables, excluding SCHEMALESS event")
-    void discoverTablesReturnsOnlySchemafullTables() {
+    @DisplayName("discoverTables() returns all tables including SCHEMALESS")
+    void discoverTablesReturnsAllTables() {
         List<String> tables = discovery.discoverTables();
 
         assertTrue(tables.contains("poi"), "Should contain poi");
@@ -47,14 +47,12 @@ class SurrealDBSchemaDiscoveryIT extends SurrealDBContainerIT {
         assertTrue(tables.contains("trail"), "Should contain trail");
         assertTrue(tables.contains("empty_geo"), "Should contain empty_geo");
         assertTrue(tables.contains("config"), "Should contain config");
-
-        assertFalse(tables.contains("event"),
-                "Should NOT contain event (SCHEMALESS)");
+        assertTrue(tables.contains("event"), "Should contain event (SCHEMALESS)");
     }
 
     @Test
     @DisplayName("discoverGeometryTables() returns tables with geometry, excluding config and event")
-    void discoverGeometryTablesExcludesConfigTable() {
+    void discoverGeometryTablesExcludesTablesWithoutGeometry() {
         List<TableSchema> geoTables = discovery.discoverGeometryTables();
         List<String> geoTableNames = geoTables.stream()
                 .map(TableSchema::getTableName)
@@ -68,7 +66,7 @@ class SurrealDBSchemaDiscoveryIT extends SurrealDBContainerIT {
         assertFalse(geoTableNames.contains("config"),
                 "Should NOT contain config (no geometry fields)");
         assertFalse(geoTableNames.contains("event"),
-                "Should NOT contain event (SCHEMALESS)");
+                "Should NOT contain event (no defined geometry fields)");
     }
 
     @Test

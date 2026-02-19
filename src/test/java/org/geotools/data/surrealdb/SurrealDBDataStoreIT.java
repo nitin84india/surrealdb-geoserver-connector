@@ -53,7 +53,7 @@ class SurrealDBDataStoreIT extends SurrealDBContainerIT {
     }
 
     @Test
-    @DisplayName("getTypeNames returns only SCHEMAFULL tables with geometry fields")
+    @DisplayName("getTypeNames returns tables with geometry fields regardless of schema mode")
     void getTypeNamesReturnsGeometryTables() throws IOException {
         SurrealDBDataStoreFactory factory = new SurrealDBDataStoreFactory();
         DataStore dataStore = factory.createDataStore(buildDataStoreParams());
@@ -71,11 +71,11 @@ class SurrealDBDataStoreIT extends SurrealDBContainerIT {
             assertTrue(typeNameList.contains("empty_geo"),
                     "Type names should include 'empty_geo' (SCHEMAFULL with geometry<point>, no records)");
 
-            // Tables without geometry or SCHEMALESS should be excluded
+            // Tables without defined geometry fields should be excluded
             assertFalse(typeNameList.contains("config"),
                     "Type names should NOT include 'config' (no geometry fields)");
             assertFalse(typeNameList.contains("event"),
-                    "Type names should NOT include 'event' (SCHEMALESS table)");
+                    "Type names should NOT include 'event' (no defined geometry fields)");
         } finally {
             dataStore.dispose();
         }

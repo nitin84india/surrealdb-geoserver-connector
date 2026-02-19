@@ -238,4 +238,26 @@ class GeometryFieldDetectorTest {
     void mapAttributeBindingOptionDatetimeReturnsDateClass() {
         assertEquals(Date.class, GeometryFieldDetector.mapAttributeBinding("option<datetime>"));
     }
+
+    // --- parameterized record<X> and array<X> tests ---
+
+    @Test
+    void mapAttributeBindingRecordWithTableReturnsStringClass() {
+        assertEquals(String.class, GeometryFieldDetector.mapAttributeBinding("record<species>"));
+    }
+
+    @Test
+    void mapAttributeBindingRecordWithProjectReturnsStringClass() {
+        assertEquals(String.class, GeometryFieldDetector.mapAttributeBinding("record<project>"));
+    }
+
+    @Test
+    void mapAttributeBindingArrayWithStringReturnsStringClass() {
+        assertEquals(String.class, GeometryFieldDetector.mapAttributeBinding("array<string>"));
+    }
+
+    @Test
+    void mapAttributeBindingArrayWithRecordReturnsStringClass() {
+        assertEquals(String.class, GeometryFieldDetector.mapAttributeBinding("array<record<ward>>"));
+    }
 }

@@ -134,6 +134,15 @@ public final class GeometryFieldDetector {
         }
 
         String unwrapped = unwrapOption(kind);
+
+        // Handle parameterized types (e.g., record<species>, array<string>)
+        if (unwrapped.startsWith("record")) {
+            return String.class;
+        }
+        if (unwrapped.startsWith("array")) {
+            return String.class;
+        }
+
         switch (unwrapped) {
             case "string":
                 return String.class;
@@ -152,10 +161,6 @@ public final class GeometryFieldDetector {
             case "duration":
                 return String.class;
             case "object":
-                return String.class;
-            case "record":
-                return String.class;
-            case "array":
                 return String.class;
             default:
                 return String.class;

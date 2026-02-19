@@ -51,7 +51,7 @@ class SchemaDiscoveryTest {
     }
 
     @Test
-    void discoverTablesFiltersSchemafullOnly() {
+    void discoverTablesIncludesBothSchemafullAndSchemaless() {
         String dbInfoJson = """
                 {
                   "tables": {
@@ -64,8 +64,9 @@ class SchemaDiscoveryTest {
 
         List<String> tables = schemaDiscovery.discoverTables();
 
-        assertEquals(1, tables.size());
-        assertEquals("poi", tables.get(0));
+        assertEquals(2, tables.size());
+        assertTrue(tables.contains("poi"));
+        assertTrue(tables.contains("event"));
     }
 
     @Test
@@ -84,6 +85,17 @@ class SchemaDiscoveryTest {
 
     @Test
     void discoverTableSchemaParseFieldDefinitions() {
+        // First discover tables to populate the schemafull cache
+        String dbInfoJson = """
+                {
+                  "tables": {
+                    "poi": "DEFINE TABLE poi TYPE NORMAL SCHEMAFULL"
+                  }
+                }
+                """;
+        when(mockClient.queryAsJson("INFO FOR DB")).thenReturn(dbInfoJson);
+        schemaDiscovery.discoverTables();
+
         String tableInfoJson = """
                 {
                   "events": {},
@@ -180,5 +192,111 @@ class SchemaDiscoveryTest {
     @Test
     void extractFieldKindReturnsNullForNoType() {
         assertNull(schemaDiscovery.extractFieldKind("DEFINE FIELD name ON poi"));
+    }
+
+    @Test
+    void discoverTableSchemaFiltersSubFields() {
+        String tableInfoJson = """
+                {
+                  "fields": {
+                    "name": "DEFINE FIELD name ON tree TYPE string",
+                    "location": "DEFINE FIELD location ON tree TYPE geometry<point>",
+                    "address": "DEFINE FIELD address ON tree TYPE object",
+                    "address.city": "DEFINE FIELD address.city ON tree TYPE string",
+                    "address.line1": "DEFINE FIELD address.line1 ON tree TYPE string",
+                    "photos": "DEFINE FIELD photos ON tree TYPE array<string>",
+                    "photos.*": "DEFINE FIELD photos.* ON tree TYPE string"
+                  }
+                }
+                """;
+        when(mockClient.queryAsJson("INFO FOR TABLE tree")).thenReturn(tableInfoJson);
+
+        TableSchema schema = schemaDiscovery.discoverTableSchema("tree");
+
+        // Only top-level fields should be included (no dot-separated sub-fields)
+        assertEquals(4, schema.getFields().size());
+        List<String> fieldNames = schema.getFields().stream()
+                .map(FieldSchema::getFieldName)
+                .toList();
+        assertTrue(fieldNames.contains("name"));
+        assertTrue(fieldNames.contains("location"));
+        assertTrue(fieldNames.contains("address"));
+        assertTrue(fieldNames.contains("photos"));
+        assertFalse(fieldNames.contains("address.city"));
+        assertFalse(fieldNames.contains("photos.*"));
+    }
+
+    @Test
+    void discoverGeometryTablesIncludesSchemalessWithGeometry() {
+        String dbInfoJson = """
+                {
+                  "tables": {
+                    "poi": "DEFINE TABLE poi TYPE NORMAL SCHEMAFULL",
+                    "tree": "DEFINE TABLE tree TYPE ANY SCHEMALESS"
+                  }
+                }
+                """;
+        when(mockClient.queryAsJson("INFO FOR DB")).thenReturn(dbInfoJson);
+
+        String poiTableInfo = """
+                {
+                  "fields": {
+                    "name": "DEFINE FIELD name ON poi TYPE string",
+                    "geometry": "DEFINE FIELD geometry ON poi TYPE geometry<point>"
+                  }
+                }
+                """;
+        when(mockClient.queryAsJson("INFO FOR TABLE poi")).thenReturn(poiTableInfo);
+
+        String treeTableInfo = """
+                {
+                  "fields": {
+                    "name": "DEFINE FIELD name ON tree TYPE string",
+                    "location": "DEFINE FIELD location ON tree TYPE geometry<point>"
+                  }
+                }
+                """;
+        when(mockClient.queryAsJson("INFO FOR TABLE tree")).thenReturn(treeTableInfo);
+
+        List<TableSchema> geometryTables = schemaDiscovery.discoverGeometryTables();
+
+        assertEquals(2, geometryTables.size());
+        List<String> names = geometryTables.stream()
+                .map(TableSchema::getTableName).toList();
+        assertTrue(names.contains("poi"));
+        assertTrue(names.contains("tree"));
+
+        // Verify schemafull flag is preserved
+        TableSchema poiSchema = geometryTables.stream()
+                .filter(t -> t.getTableName().equals("poi")).findFirst().orElseThrow();
+        assertTrue(poiSchema.isSchemafull());
+
+        TableSchema treeSchema = geometryTables.stream()
+                .filter(t -> t.getTableName().equals("tree")).findFirst().orElseThrow();
+        assertFalse(treeSchema.isSchemafull());
+    }
+
+    @Test
+    void discoverTableSchemaSkipsFieldsWithNoType() {
+        String tableInfoJson = """
+                {
+                  "fields": {
+                    "name": "DEFINE FIELD name ON tree TYPE string",
+                    "location": "DEFINE FIELD location ON tree TYPE geometry<point>",
+                    "carbon_seq_kg": "DEFINE FIELD carbon_seq_kg ON tree VALUE fn::calculate_carbon(girth_cm, species, age_years) PERMISSIONS FULL"
+                  }
+                }
+                """;
+        when(mockClient.queryAsJson("INFO FOR TABLE tree")).thenReturn(tableInfoJson);
+
+        TableSchema schema = schemaDiscovery.discoverTableSchema("tree");
+
+        // Computed VALUE field without TYPE should be skipped
+        assertEquals(2, schema.getFields().size());
+        List<String> fieldNames = schema.getFields().stream()
+                .map(FieldSchema::getFieldName).toList();
+        assertTrue(fieldNames.contains("name"));
+        assertTrue(fieldNames.contains("location"));
+        assertFalse(fieldNames.contains("carbon_seq_kg"));
     }
 }
