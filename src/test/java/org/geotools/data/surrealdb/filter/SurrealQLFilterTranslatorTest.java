@@ -314,6 +314,75 @@ class SurrealQLFilterTranslatorTest {
                 SurrealQLFilterTranslator.likeToRegex("100\\%", "%", "_", "\\"));
     }
 
+    // --- Record field handling ---
+
+    @Test
+    void translateComparisonOnRecordFieldWrapsAsRecordId() {
+        // Create a schema with a record<species> field
+        List<FieldSchema> fields = Arrays.asList(
+                new FieldSchema("name", "string"),
+                new FieldSchema("species", "record<species>"),
+                new FieldSchema("geometry", "geometry<point>")
+        );
+        TableSchema treeSchema = new TableSchema("tree", fields, true);
+        SurrealQLFilterTranslator treeTranslator =
+                new SurrealQLFilterTranslator(treeSchema, "geometry");
+
+        Filter filter = FF.equals(FF.property("species"), FF.literal("species:neem"));
+
+        TranslationResult result = treeTranslator.translate(filter);
+
+        assertTrue(result.getWhereClause().contains("species = $p"));
+        // The parameter value should be a RecordId, not a plain String
+        Object paramValue = result.getParams().values().iterator().next();
+        assertInstanceOf(RecordId.class, paramValue);
+        assertEquals("species:neem", ((RecordId) paramValue).getValue());
+    }
+
+    @Test
+    void translateComparisonOnOptionRecordFieldWrapsAsRecordId() {
+        List<FieldSchema> fields = Arrays.asList(
+                new FieldSchema("owner", "option<record<person>>"),
+                new FieldSchema("geometry", "geometry<point>")
+        );
+        TableSchema schema = new TableSchema("asset", fields, true);
+        SurrealQLFilterTranslator assetTranslator =
+                new SurrealQLFilterTranslator(schema, "geometry");
+
+        Filter filter = FF.equals(FF.property("owner"), FF.literal("person:john"));
+
+        TranslationResult result = assetTranslator.translate(filter);
+
+        Object paramValue = result.getParams().values().iterator().next();
+        assertInstanceOf(RecordId.class, paramValue);
+        assertEquals("person:john", ((RecordId) paramValue).getValue());
+    }
+
+    @Test
+    void translateComparisonOnStringFieldKeepsString() {
+        // Using the default "poi" schema from setUp() — "category" is a string field
+        Filter filter = FF.equals(FF.property("category"), FF.literal("park"));
+
+        TranslationResult result = translator.translate(filter);
+
+        assertTrue(result.getWhereClause().contains("category = $p"));
+        // The parameter value should remain a plain String, not RecordId
+        Object paramValue = result.getParams().values().iterator().next();
+        assertInstanceOf(String.class, paramValue);
+        assertEquals("park", paramValue);
+    }
+
+    @Test
+    void translateComparisonOnUnknownFieldKeepsString() {
+        // Field not in schema — should not wrap as RecordId
+        Filter filter = FF.equals(FF.property("unknown_field"), FF.literal("some:value"));
+
+        TranslationResult result = translator.translate(filter);
+
+        Object paramValue = result.getParams().values().iterator().next();
+        assertInstanceOf(String.class, paramValue);
+    }
+
     // --- Helpers ---
 
     private Polygon createTestPolygon() {
