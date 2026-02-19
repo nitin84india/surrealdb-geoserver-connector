@@ -49,6 +49,16 @@ public class SurrealDBFeatureSource extends ContentFeatureSource {
     }
 
     @Override
+    protected boolean canLimit() {
+        return true;
+    }
+
+    @Override
+    protected boolean canOffset() {
+        return true;
+    }
+
+    @Override
     protected SimpleFeatureType buildFeatureType() throws IOException {
         SurrealDBDataStore dataStore = (SurrealDBDataStore) getDataStore();
         String tableName = entry.getName().getLocalPart();

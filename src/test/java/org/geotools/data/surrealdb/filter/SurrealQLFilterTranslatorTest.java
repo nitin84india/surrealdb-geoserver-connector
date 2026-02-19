@@ -211,12 +211,13 @@ class SurrealQLFilterTranslatorTest {
     // --- Like ---
 
     @Test
-    void translateLikeProducesRegex() {
+    void translateLikeProducesStringMatchesRegex() {
         Filter filter = FF.like(FF.property("name"), "Central%", "%", "_", "\\");
 
         TranslationResult result = translator.translate(filter);
 
-        assertTrue(result.getWhereClause().contains("name ~ $p"));
+        assertTrue(result.getWhereClause().contains("string::matches(name, $p"),
+                "LIKE should produce string::matches() function call, got: " + result.getWhereClause());
         String regex = (String) result.getParams().values().iterator().next();
         assertEquals("^Central.*$", regex);
     }

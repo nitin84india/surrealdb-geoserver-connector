@@ -420,7 +420,7 @@ sequenceDiagram
     FT-->>FS: TranslationResult{where, params}
 
     FS->>Client: queryBindAsJson(sql, params)
-    Client->>Client: Build LET $p0 = {...}; SELECT ...
+    Client->>Client: Build LET $p0 = {...}; SELECT
     Client->>DB: POST /sql (Basic Auth)
     DB-->>Client: [{result: [...], status: "OK"}]
     Client->>Client: Extract last statement result

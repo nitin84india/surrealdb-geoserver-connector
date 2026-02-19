@@ -27,14 +27,31 @@ public final class GeometryFieldDetector {
     }
 
     /**
+     * Strips the "option&lt;&gt;" wrapper from a SurrealDB kind string.
+     * For example, "option&lt;string&gt;" becomes "string" and
+     * "option&lt;geometry&lt;point&gt;&gt;" becomes "geometry&lt;point&gt;".
+     *
+     * @param kind the SurrealDB field kind string, may be null
+     * @return the unwrapped kind, or the original if not wrapped
+     */
+    static String unwrapOption(String kind) {
+        if (kind != null && kind.startsWith("option<") && kind.endsWith(">")) {
+            return kind.substring(7, kind.length() - 1);
+        }
+        return kind;
+    }
+
+    /**
      * Returns true if the given SurrealDB kind string represents a geometry type.
      * A kind is considered geometry if it is non-null and starts with "geometry" (case-sensitive).
+     * Also recognizes option-wrapped geometry types like "option&lt;geometry&lt;point&gt;&gt;".
      *
      * @param kind the SurrealDB field kind string, may be null
      * @return true if the kind represents a geometry type
      */
     public static boolean isGeometryKind(String kind) {
-        return kind != null && kind.startsWith("geometry");
+        String unwrapped = unwrapOption(kind);
+        return unwrapped != null && unwrapped.startsWith("geometry");
     }
 
     /**
@@ -58,12 +75,13 @@ public final class GeometryFieldDetector {
      * @throws IllegalArgumentException if kind is null or does not start with "geometry"
      */
     public static Class<? extends Geometry> mapGeometryBinding(String kind) {
-        if (kind == null || !kind.startsWith("geometry")) {
+        String unwrapped = unwrapOption(kind);
+        if (unwrapped == null || !unwrapped.startsWith("geometry")) {
             throw new IllegalArgumentException(
                     "Not a geometry kind: " + kind);
         }
 
-        switch (kind) {
+        switch (unwrapped) {
             case "geometry<point>":
                 return Point.class;
             case "geometry<line>":
@@ -115,7 +133,8 @@ public final class GeometryFieldDetector {
             return String.class;
         }
 
-        switch (kind) {
+        String unwrapped = unwrapOption(kind);
+        switch (unwrapped) {
             case "string":
                 return String.class;
             case "int":

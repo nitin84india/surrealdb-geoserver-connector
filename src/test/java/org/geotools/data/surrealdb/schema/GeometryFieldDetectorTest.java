@@ -181,4 +181,61 @@ class GeometryFieldDetectorTest {
     void mapAttributeBindingNullReturnsStringClass() {
         assertEquals(String.class, GeometryFieldDetector.mapAttributeBinding(null));
     }
+
+    // --- option<> unwrapping tests ---
+
+    @Test
+    void isGeometryKindReturnsTrueForOptionGeometryPoint() {
+        assertTrue(GeometryFieldDetector.isGeometryKind("option<geometry<point>>"));
+    }
+
+    @Test
+    void isGeometryKindReturnsFalseForOptionString() {
+        assertFalse(GeometryFieldDetector.isGeometryKind("option<string>"));
+    }
+
+    @Test
+    void isGeometryKindReturnsFalseForOptionFloat() {
+        assertFalse(GeometryFieldDetector.isGeometryKind("option<float>"));
+    }
+
+    @Test
+    void mapGeometryBindingOptionGeometryPointReturnsPointClass() {
+        assertEquals(Point.class, GeometryFieldDetector.mapGeometryBinding("option<geometry<point>>"));
+    }
+
+    @Test
+    void mapGeometryBindingOptionGeometryPolygonReturnsPolygonClass() {
+        assertEquals(Polygon.class, GeometryFieldDetector.mapGeometryBinding("option<geometry<polygon>>"));
+    }
+
+    @Test
+    void mapGeometryBindingOptionBareGeometryReturnsGeometryClass() {
+        assertEquals(Geometry.class, GeometryFieldDetector.mapGeometryBinding("option<geometry>"));
+    }
+
+    @Test
+    void mapAttributeBindingOptionStringReturnsStringClass() {
+        assertEquals(String.class, GeometryFieldDetector.mapAttributeBinding("option<string>"));
+    }
+
+    @Test
+    void mapAttributeBindingOptionFloatReturnsDoubleClass() {
+        assertEquals(Double.class, GeometryFieldDetector.mapAttributeBinding("option<float>"));
+    }
+
+    @Test
+    void mapAttributeBindingOptionIntReturnsLongClass() {
+        assertEquals(Long.class, GeometryFieldDetector.mapAttributeBinding("option<int>"));
+    }
+
+    @Test
+    void mapAttributeBindingOptionBoolReturnsBooleanClass() {
+        assertEquals(Boolean.class, GeometryFieldDetector.mapAttributeBinding("option<bool>"));
+    }
+
+    @Test
+    void mapAttributeBindingOptionDatetimeReturnsDateClass() {
+        assertEquals(Date.class, GeometryFieldDetector.mapAttributeBinding("option<datetime>"));
+    }
 }

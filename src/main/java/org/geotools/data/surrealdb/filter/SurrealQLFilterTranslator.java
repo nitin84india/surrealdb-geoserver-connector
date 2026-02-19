@@ -276,12 +276,14 @@ public class SurrealQLFilterTranslator {
 
         String regex = likeToRegex(pattern, wildCard, singleChar, escape);
 
+        // SurrealDB v2.x: the ~ operator is a fuzzy/contains match, NOT a regex operator.
+        // Use string::matches(field, pattern) for proper regex matching.
         String paramName = nextParam();
         Map<String, Object> params = new HashMap<>();
         params.put(paramName, regex);
 
         return new TranslationResult(
-                propertyName + " ~ $" + paramName, params);
+                "string::matches(" + propertyName + ", $" + paramName + ")", params);
     }
 
     private TranslationResult translateIsNull(PropertyIsNull isNull) {
