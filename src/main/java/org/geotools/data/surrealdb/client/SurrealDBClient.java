@@ -35,6 +35,18 @@ public interface SurrealDBClient extends Closeable {
     Response query(String surrealQL);
 
     /**
+     * Executes a SurrealQL query and returns the result as a JSON string.
+     * This decouples schema parsing from the SDK's JNI-backed Response/Value types,
+     * enabling testability via mock clients.
+     *
+     * @param surrealQL the query string
+     * @return the query result as a JSON string
+     * @throws SurrealDBQueryException if the query fails
+     * @throws SurrealDBConnectionException if not connected
+     */
+    String queryAsJson(String surrealQL);
+
+    /**
      * Executes a parameterized SurrealQL query.
      *
      * @param surrealQL the query string with $param placeholders

@@ -24,7 +24,7 @@ public final class SurrealDBDataStoreParams {
             "port", Integer.class, "SurrealDB server port", false, 8000);
 
     public static final Param NAMESPACE = new Param(
-            "namespace", String.class, "SurrealDB namespace", true);
+            "surreal_ns", String.class, "SurrealDB namespace", true);
 
     public static final Param DATABASE = new Param(
             "database", String.class, "SurrealDB database", true);

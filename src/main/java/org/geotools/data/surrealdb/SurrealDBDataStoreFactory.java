@@ -16,8 +16,7 @@ import java.util.Map;
  * SPI entry point for the SurrealDB DataStore plugin.
  * GeoServer discovers this class via META-INF/services/org.geotools.api.data.DataStoreFactorySpi.
  *
- * <p>Phase 1: Validates connection parameters and verifies connectivity.
- * The actual DataStore implementation will be added in Phase 2.</p>
+ * <p>Creates a {@link SurrealDBDataStore} backed by a {@link SurrealDBSdkClient}.</p>
  */
 public class SurrealDBDataStoreFactory implements DataStoreFactorySpi {
 
@@ -77,10 +76,7 @@ public class SurrealDBDataStoreFactory implements DataStoreFactorySpi {
         client.connect(config);
         LOG.info("SurrealDB connection verified successfully");
 
-        // Phase 1 placeholder - DataStore class will be implemented in Phase 2
-        client.close();
-        throw new UnsupportedOperationException(
-                "SurrealDBDataStore not yet implemented - Phase 2. Connection was verified successfully.");
+        return new SurrealDBDataStore(client, config);
     }
 
     @Override

@@ -3,6 +3,7 @@ package org.geotools.data.surrealdb.client;
 import com.surrealdb.Response;
 import com.surrealdb.Surreal;
 import com.surrealdb.signin.Database;
+import com.surrealdb.signin.Root;
 import com.surrealdb.signin.Token;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,6 +100,25 @@ public class SurrealDBSdkClient implements SurrealDBClient {
     }
 
     @Override
+    public String queryAsJson(String surrealQL) {
+        ensureConnected();
+        ensureAuthenticated();
+
+        try {
+            LOG.debug("Executing query (JSON): {}", surrealQL);
+            Response response = driver.query(surrealQL);
+            com.surrealdb.Value value = response.take(0);
+            return value.toString();
+        } catch (Exception e) {
+            if (isAuthError(e)) {
+                return retryAsJsonAfterReauth(surrealQL);
+            }
+            throw new SurrealDBQueryException(
+                    "JSON query execution failed: " + e.getMessage(), surrealQL, e);
+        }
+    }
+
+    @Override
     public ConnectionConfig getConfig() {
         return config;
     }
@@ -141,17 +161,28 @@ public class SurrealDBSdkClient implements SurrealDBClient {
     }
 
     private void performSignin() {
+        LOG.debug("Signing in to SurrealDB ns={} db={} user={}",
+                config.getNamespace(), config.getDatabase(), config.getUsername());
+
+        // Try Root signin first (for server root users), then Database signin (for DB-scoped users)
         try {
-            LOG.debug("Signing in to SurrealDB ns={} db={} user={}",
-                    config.getNamespace(), config.getDatabase(), config.getUsername());
+            Token token = driver.signin(new Root(config.getUsername(), config.getPassword()));
+            authManager.updateToken(token);
+            LOG.info("Successfully authenticated to SurrealDB as root user");
+            return;
+        } catch (Exception rootEx) {
+            LOG.debug("Root signin failed, trying database-scoped signin: {}", rootEx.getMessage());
+        }
+
+        try {
             Token token = driver.signin(new Database(
                     config.getUsername(), config.getPassword(),
                     config.getNamespace(), config.getDatabase()));
             authManager.updateToken(token);
-            LOG.info("Successfully authenticated to SurrealDB");
-        } catch (Exception e) {
+            LOG.info("Successfully authenticated to SurrealDB as database user");
+        } catch (Exception dbEx) {
             throw new SurrealDBConnectionException(
-                    "Failed to authenticate to SurrealDB: " + e.getMessage(), e);
+                    "Failed to authenticate to SurrealDB: " + dbEx.getMessage(), dbEx);
         }
     }
 
@@ -173,6 +204,20 @@ public class SurrealDBSdkClient implements SurrealDBClient {
         if (message == null) return false;
         String lower = message.toLowerCase();
         return lower.contains("auth") || lower.contains("token") || lower.contains("401");
+    }
+
+    private String retryAsJsonAfterReauth(String surrealQL) {
+        LOG.warn("Auth error on JSON query, retrying after re-authentication");
+        try {
+            authManager.invalidate();
+            performSignin();
+            Response response = driver.query(surrealQL);
+            com.surrealdb.Value value = response.take(0);
+            return value.toString();
+        } catch (Exception retryEx) {
+            throw new SurrealDBQueryException(
+                    "JSON query failed after re-authentication: " + retryEx.getMessage(), surrealQL, retryEx);
+        }
     }
 
     private Response retryAfterReauth(String surrealQL, Map<String, Object> params) {

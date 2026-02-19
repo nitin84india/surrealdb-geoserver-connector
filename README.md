@@ -118,7 +118,7 @@ docker-compose up -d
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Foundation -- Maven scaffolding, DataStoreFactory, SurrealDBClient, JWT auth, unit tests | Complete |
-| 2 | Schema & Type Mapping -- SchemaDiscovery, GeometryFieldDetector, GeoJSON-to-JTS converter | Planned |
+| 2 | Schema & Type Mapping -- SchemaDiscovery, GeometryFieldDetector, GeoJSON-to-JTS converter | Complete |
 | 3 | Feature Reading & Filters -- FeatureSource, FeatureReader, FilterTranslator (BBOX, spatial, property) | Planned |
 | 4 | GeoServer Integration -- Deploy JAR, Web Admin, WMS GetMap, WFS GetFeature, profiling | Planned |
 | 5 | Hardening -- Connection pooling, caching, TLS, error handling, logging, load testing | Planned |
@@ -151,17 +151,32 @@ geoserver-surrealdb-connector/
 │   │   │   ├── schema/
 │   │   │   │   ├── SchemaDiscovery.java
 │   │   │   │   ├── GeometryFieldDetector.java
-│   │   │   │   └── FeatureTypeMapper.java
+│   │   │   │   ├── FeatureTypeMapper.java
+│   │   │   │   ├── FieldSchema.java
+│   │   │   │   └── TableSchema.java
 │   │   │   └── geometry/
-│   │   │       ├── GeoJsonToJtsConverter.java
-│   │   │       └── JtsToGeoJsonConverter.java
+│   │   │       └── GeoJsonToJtsConverter.java
 │   │   └── resources/
 │   │       └── META-INF/services/
 │   │           └── org.geotools.api.data.DataStoreFactorySpi
 │   └── test/
 │       └── java/org/geotools/data/surrealdb/
+│           ├── SurrealDBDataStoreFactoryTest.java
+│           ├── SurrealDBDataStoreTest.java
 │           ├── client/
-│           └── config/
+│           │   ├── AuthManagerTest.java
+│           │   ├── ConnectionConfigTest.java
+│           │   └── SurrealDBSdkClientTest.java
+│           ├── config/
+│           │   └── SurrealDBDataStoreParamsTest.java
+│           ├── schema/
+│           │   ├── FieldSchemaTest.java
+│           │   ├── TableSchemaTest.java
+│           │   ├── GeometryFieldDetectorTest.java
+│           │   ├── SchemaDiscoveryTest.java
+│           │   └── FeatureTypeMapperTest.java
+│           └── geometry/
+│               └── GeoJsonToJtsConverterTest.java
 ├── ARCHITECTURE.md
 ├── CLAUDE.md
 └── README.md

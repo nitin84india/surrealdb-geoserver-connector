@@ -16,7 +16,7 @@ class SurrealDBDataStoreParamsTest {
         Map<String, Object> params = new HashMap<>();
         params.put("host", "myhost");
         params.put("port", 9000);
-        params.put("namespace", "myns");
+        params.put("surreal_ns", "myns");
         params.put("database", "mydb");
         params.put("user", "myuser");
         params.put("password", "mypass");
@@ -45,7 +45,7 @@ class SurrealDBDataStoreParamsTest {
     void toConnectionConfigUsesDefaultsForOptionals() throws IOException {
         Map<String, Object> params = new HashMap<>();
         params.put("host", "localhost");
-        params.put("namespace", "ns");
+        params.put("surreal_ns", "ns");
         params.put("database", "db");
         params.put("user", "user");
         params.put("password", "pass");

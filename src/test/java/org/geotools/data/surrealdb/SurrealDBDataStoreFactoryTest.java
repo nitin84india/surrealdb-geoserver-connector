@@ -1,5 +1,6 @@
 package org.geotools.data.surrealdb;
 
+import org.geotools.api.data.DataStore;
 import org.geotools.data.surrealdb.client.ConnectionConfig;
 import org.geotools.data.surrealdb.client.SurrealDBClient;
 import org.geotools.data.surrealdb.config.SurrealDBDataStoreParams;
@@ -41,7 +42,7 @@ class SurrealDBDataStoreFactoryTest {
         params.put("dbtype", "surrealdb");
         params.put("host", "localhost");
         params.put("port", 8000);
-        params.put("namespace", "test_ns");
+        params.put("surreal_ns", "test_ns");
         params.put("database", "test_db");
         params.put("user", "testuser");
         params.put("password", "testpass");
@@ -94,15 +95,13 @@ class SurrealDBDataStoreFactoryTest {
     }
 
     @Test
-    void createDataStoreConnectsAndThrowsPhase2Placeholder() throws IOException {
+    void createDataStoreReturnsRealDataStore() throws IOException {
         doNothing().when(mockClient).connect(any(ConnectionConfig.class));
-        doNothing().when(mockClient).close();
 
-        UnsupportedOperationException ex = assertThrows(UnsupportedOperationException.class, () ->
-                factory.createDataStore(validParams()));
+        DataStore dataStore = factory.createDataStore(validParams());
 
-        assertTrue(ex.getMessage().contains("Phase 2"));
+        assertNotNull(dataStore);
+        assertInstanceOf(SurrealDBDataStore.class, dataStore);
         verify(mockClient).connect(any(ConnectionConfig.class));
-        verify(mockClient).close();
     }
 }
