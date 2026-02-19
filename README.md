@@ -2,7 +2,7 @@
 
 A GeoServer DataStore plugin that connects [GeoServer](https://geoserver.org/) to [SurrealDB](https://surrealdb.com/), enabling geometry data stored in SurrealDB to be served as OGC-compliant **WMS** and **WFS** layers. The connector auto-discovers SurrealDB schemas, translates OGC filters to SurrealQL, and streams GeoJSON geometries as JTS features.
 
-**Supported**: GeoServer 2.28.x / GeoTools 34.x / SurrealDB v2.x
+**Supported**: GeoServer 2.28.x / GeoTools 34.x / SurrealDB v2.x & v3.x
 
 ## Table of Contents
 
@@ -23,12 +23,13 @@ A GeoServer DataStore plugin that connects [GeoServer](https://geoserver.org/) t
 
 ## Features
 
-- Auto-discovers `SCHEMAFULL` tables with geometry fields
+- Auto-discovers tables with geometry fields (both `SCHEMAFULL` and `SCHEMALESS`)
 - Serves layers via **WMS 1.3.0** (map tiles) and **WFS 2.0** (feature queries)
 - Translates OGC filters (BBOX, spatial, comparison, logical) to SurrealQL
 - Supports all 7 GeoJSON geometry types (Point, LineString, Polygon, Multi*, GeometryCollection)
 - Parameterized queries to prevent SurrealQL injection
-- JWT authentication with automatic token refresh
+- Pure HTTP client -- compatible with SurrealDB v2.x and v3.x (no SDK/WebSocket dependency)
+- HTTP Basic authentication on every request (no JWT token management)
 - Works with both root and database-scoped SurrealDB users
 
 ## Installation
@@ -71,7 +72,7 @@ If you already have GeoServer running (standalone or Tomcat), follow these steps
 
 ```mermaid
 flowchart LR
-    A[Build JAR] --> B[Copy 3 JARs to\nGeoServer lib/]
+    A[Build JAR] --> B[Copy 2 JARs to\nGeoServer lib/]
     B --> C[Override Gson JAR]
     C --> D[Restart GeoServer]
     D --> E[Add SurrealDB\nData Store]
@@ -89,7 +90,6 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn clean package -DskipTests
 
 This produces:
 - `target/gt-surrealdb-1.0.0-SNAPSHOT.jar` -- the plugin
-- `target/lib/surrealdb-1.0.0-beta.1.jar` -- SurrealDB Java SDK
 - `target/lib/gson-2.11.0.jar` -- Gson (required override)
 
 #### Step 2: Locate GeoServer's Library Directory
@@ -105,16 +105,13 @@ Find the `WEB-INF/lib/` directory of your GeoServer installation:
 
 #### Step 3: Copy the JARs
 
-Copy all three JARs into GeoServer's `WEB-INF/lib/` directory:
+Copy the JARs into GeoServer's `WEB-INF/lib/` directory:
 
 ```bash
 GEOSERVER_LIB="/path/to/geoserver/WEB-INF/lib"
 
 # Copy the plugin JAR
 cp target/gt-surrealdb-1.0.0-SNAPSHOT.jar "$GEOSERVER_LIB/"
-
-# Copy the SurrealDB SDK JAR
-cp target/lib/surrealdb-1.0.0-beta.1.jar "$GEOSERVER_LIB/"
 
 # Copy Gson 2.11.0 (required: GeoServer ships an older version)
 cp target/lib/gson-2.11.0.jar "$GEOSERVER_LIB/"
@@ -183,7 +180,7 @@ Once the plugin is installed, connect GeoServer to your SurrealDB instance:
 
 5. Click **Save**
 
-The connector runs `INFO FOR DB` and `INFO FOR TABLE` to discover all `SCHEMAFULL` tables that contain at least one geometry field.
+The connector runs `INFO FOR DB` and `INFO FOR TABLE` to discover all tables (both `SCHEMAFULL` and `SCHEMALESS`) that contain at least one typed geometry field.
 
 ## Publishing Layers
 
@@ -236,19 +233,18 @@ flowchart TB
 
 ## SurrealDB Schema Requirements
 
-The connector only discovers **SCHEMAFULL** tables with typed geometry fields. Your SurrealDB tables must be defined like this:
+The connector discovers both **SCHEMAFULL** and **SCHEMALESS** tables that have at least one typed geometry field defined. Tables without explicit geometry field definitions are excluded.
+
+### SCHEMAFULL Tables
 
 ```sql
--- Define a SCHEMAFULL table (required -- SCHEMALESS tables are ignored)
+-- All fields must be explicitly typed
 DEFINE TABLE poi SCHEMAFULL;
-
--- Define fields with explicit types
 DEFINE FIELD name     ON poi TYPE string;
 DEFINE FIELD geometry ON poi TYPE geometry<point>;
 DEFINE FIELD category ON poi TYPE option<string>;
 DEFINE FIELD rating   ON poi TYPE option<float>;
 
--- Insert data with GeoJSON geometry
 CREATE poi SET
   name = "Central Park",
   geometry = {"type": "Point", "coordinates": [-73.9654, 40.7829]},
@@ -256,11 +252,28 @@ CREATE poi SET
   rating = 4.8;
 ```
 
+### SCHEMALESS Tables
+
+```sql
+-- Only geometry and key fields need DEFINE FIELD; other fields are dynamic
+DEFINE TABLE tree SCHEMALESS;
+DEFINE FIELD location ON tree TYPE geometry<point>;
+DEFINE FIELD species  ON tree TYPE option<string>;
+
+-- SCHEMALESS tables accept additional fields without DEFINE FIELD
+CREATE tree SET
+  location = {"type": "Point", "coordinates": [-73.9680, 40.7812]},
+  species = "Oak",
+  girth_cm = 45,
+  planted = d"2010-03-15";
+```
+
 **Key rules**:
-- Tables must be `SCHEMAFULL` (use `DEFINE TABLE ... SCHEMAFULL`)
 - At least one field must be a geometry type (e.g., `geometry<point>`, `geometry<polygon>`)
 - Geometry values must be valid GeoJSON
 - Nullable fields should use `option<type>` (e.g., `option<string>`)
+- Sub-fields (e.g., `address.city`, `photos.*`) are automatically filtered out -- only top-level fields are exposed
+- Computed `VALUE` fields without a `TYPE` declaration are skipped
 - The connector requires a user with **root** access or a DB-scoped user with at least **EDITOR** role
 
 ### Supported Geometry Field Types
@@ -304,7 +317,7 @@ flowchart LR
         S_OUT["OUTSIDE"]
         S_DIST["geo::distance()"]
         S_CMP["= != < > <= >="]
-        S_RE["~ (regex)"]
+        S_RE["string::matches()"]
         S_NONE["IS NONE"]
         S_LOGIC["AND / OR / NOT"]
     end
@@ -338,7 +351,7 @@ flowchart LR
 | `PropertyIsLessThanOrEqualTo` | `field <= $p0` | Less than or equal |
 | `PropertyIsGreaterThanOrEqualTo` | `field >= $p0` | Greater than or equal |
 | `PropertyIsBetween` | `field >= $p0 AND field <= $p1` | Range check |
-| `PropertyIsLike` | `field ~ $p0` | LIKE pattern converted to regex |
+| `PropertyIsLike` | `string::matches(field, $p0)` | LIKE pattern converted to regex |
 | `PropertyIsNull` | `field IS NONE` | Null check |
 | `And` / `Or` / `Not` | `AND` / `OR` / `NOT (...)` | Logical composition |
 
@@ -377,14 +390,13 @@ graph TB
 
         subgraph Client["Client Layer"]
             Interface["SurrealDBClient\n(Interface)"]
-            SdkClient["SurrealDBSdkClient\n(SDK + HTTP REST)"]
-            AuthMgr["AuthManager\n(JWT Lifecycle)"]
+            SdkClient["SurrealDBSdkClient\n(Pure HTTP)"]
         end
     end
 
-    subgraph Database["SurrealDB v2.x"]
+    subgraph Database["SurrealDB v2.x / v3.x"]
         HTTP_API["/sql HTTP Endpoint"]
-        SDK_API["JNI SDK\n(Connection + Auth)"]
+        Health["/health Endpoint"]
     end
 
     WMS & WFS & WebAdmin --> Factory
@@ -398,9 +410,8 @@ graph TB
     FeatureSource --> Interface
     Discovery --> Interface
     Interface --> SdkClient
-    SdkClient --> AuthMgr
-    SdkClient -- "JSON queries\n(GeoJSON preserved)" --> HTTP_API
-    SdkClient -- "Connection +\nAuthentication" --> SDK_API
+    SdkClient -- "Queries + Auth\n(Basic Auth, GeoJSON preserved)" --> HTTP_API
+    SdkClient -- "Connection validation\n+ health checks" --> Health
 ```
 
 ### Query Execution Flow
@@ -444,20 +455,21 @@ sequenceDiagram
     DS->>SD: discoverGeometryTables()
     SD->>Client: queryAsJson("INFO FOR DB")
     Client->>DB: INFO FOR DB
-    DB-->>Client: {tables: {poi: "...SCHEMAFULL", event: "...SCHEMALESS"}}
-    SD->>SD: Filter SCHEMAFULL tables only
+    DB-->>Client: {tables: {poi: "...SCHEMAFULL", tree: "...SCHEMALESS"}}
+    SD->>SD: Collect all tables + cache schema modes
 
-    loop For each SCHEMAFULL table
+    loop For each table
         SD->>Client: queryAsJson("INFO FOR TABLE poi")
         Client->>DB: INFO FOR TABLE poi
         DB-->>Client: {fields: {geometry: "...TYPE geometry<point>"}}
+        SD->>SD: Filter sub-fields and no-TYPE fields
         SD->>SD: Check for geometry fields
         SD->>SD: Build TableSchema + FieldSchema
     end
 
     SD-->>DS: List of TableSchema (geometry tables only)
     DS->>DS: Cache schemas in ConcurrentHashMap
-    DS-->>GS: ["poi", "park", "trail"]
+    DS-->>GS: ["poi", "park", "trail", "tree"]
 ```
 
 ## Type Mapping
@@ -512,7 +524,8 @@ graph LR
 | `datetime` | `java.util.Date` |
 | `decimal` | `BigDecimal` |
 | `duration` | `String` |
-| `object` / `record` / `array` | `String` (JSON) |
+| `object` / `record` / `record<X>` / `array` / `array<X>` | `String` (JSON) |
+| `option<T>` | Same as `T` (wrapper stripped) |
 
 ## Building from Source
 
@@ -532,8 +545,12 @@ cd geoserver-surrealdb-connector
 # Build (skip tests for faster build)
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn clean package -DskipTests
 
-# Build with tests (192 tests across 17 test classes)
+# Run unit tests (210 tests across 17 test classes)
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn clean test
+
+# Run all tests including integration tests (264 tests = 210 unit + 54 integration)
+# Requires Docker for Testcontainers
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn clean verify
 ```
 
 > **Linux users**: Replace the `JAVA_HOME` path with your Java 21 installation (e.g., `/usr/lib/jvm/java-21-openjdk`).
@@ -546,13 +563,12 @@ After `mvn package`, the following artifacts are produced:
 target/
   gt-surrealdb-1.0.0-SNAPSHOT.jar   # Plugin JAR (deploy this)
   lib/
-    surrealdb-1.0.0-beta.1.jar      # SurrealDB Java SDK
-    gson-2.11.0.jar                  # Gson (Gson override)
+    gson-2.11.0.jar                  # Gson override (replaces GeoServer's bundled version)
 ```
 
 ### Docker Demo Stack
 
-The included `docker-compose.yml` runs SurrealDB v2.2.1 and GeoServer 2.28.0 with the plugin auto-mounted:
+The included `docker-compose.yml` runs SurrealDB and GeoServer 2.28.0 with the plugin auto-mounted:
 
 ```bash
 # Start the stack
@@ -560,6 +576,9 @@ docker compose up -d
 
 # Load sample data (7 POIs, 2 parks, 1 trail)
 bash docker/init-surreal.sh
+
+# Auto-configure GeoServer (workspace, datastore, layers)
+bash docker/setup-geoserver.sh
 
 # Stop the stack
 docker compose down
@@ -572,7 +591,7 @@ Sample data is loaded into namespace `geoserver`, database `spatial`:
 | `poi` | `geometry<point>` | 7 | Points of interest (NYC, LA, SF) |
 | `park` | `geometry<polygon>` | 2 | Park boundaries (Central Park, Bryant Park) |
 | `trail` | `geometry<line>` | 1 | Trail path (Hudson River Greenway) |
-| `event` | *(SCHEMALESS)* | 1 | Excluded from discovery by design |
+| `event` | *(SCHEMALESS, no geometry fields defined)* | 1 | Excluded -- no typed geometry field |
 
 ## Troubleshooting
 
@@ -610,17 +629,18 @@ ls "$GEOSERVER_LIB"/gson*
 
 ### No tables discovered (empty layer list)
 
-- Only `SCHEMAFULL` tables with geometry fields are discovered
-- Verify your tables are defined correctly:
+- Tables must have at least one `DEFINE FIELD ... TYPE geometry<X>` to be discovered
+- Both `SCHEMAFULL` and `SCHEMALESS` tables are supported, but geometry fields must be explicitly typed
+- Verify your tables have geometry field definitions:
   ```bash
   curl -s -X POST http://localhost:8000/sql \
     -u root:root \
     -H "surreal-ns: <namespace>" \
     -H "surreal-db: <database>" \
     -H "Accept: application/json" \
-    -d "INFO FOR DB"
+    -d "INFO FOR TABLE <table>"
   ```
-  Check that tables show `SCHEMAFULL` in the definition string.
+  Check that at least one field shows `TYPE geometry<...>` in the definition string.
 
 ### Blank WMS tiles / no features in WFS
 
@@ -646,10 +666,11 @@ ls "$GEOSERVER_LIB"/gson*
 
 ```
 geoserver-surrealdb-connector/
-├── pom.xml                            # Maven (GeoTools 34.1, SurrealDB SDK 1.0.0-beta.1)
-├── docker-compose.yml                 # SurrealDB v2.2.1 + GeoServer 2.28.0
+├── pom.xml                            # Maven (GeoTools 34.1, Testcontainers 1.19)
+├── docker-compose.yml                 # SurrealDB + GeoServer 2.28.0
 ├── docker/
-│   └── init-surreal.sh                # Sample spatial data (poi, park, trail)
+│   ├── init-surreal.sh                # Sample spatial data (poi, park, trail)
+│   └── setup-geoserver.sh            # Automated GeoServer REST API setup
 ├── src/
 │   ├── main/java/org/geotools/data/surrealdb/
 │   │   ├── SurrealDBDataStoreFactory.java     # SPI entry point
@@ -658,9 +679,9 @@ geoserver-surrealdb-connector/
 │   │   ├── SurrealDBFeatureReader.java        # JSON -> SimpleFeature streaming
 │   │   ├── client/
 │   │   │   ├── SurrealDBClient.java           # Interface (Port)
-│   │   │   ├── SurrealDBSdkClient.java        # SDK + HTTP REST adapter
+│   │   │   ├── SurrealDBSdkClient.java        # Pure HTTP REST client (v2+v3)
 │   │   │   ├── ConnectionConfig.java          # Immutable config value object
-│   │   │   └── AuthManager.java               # JWT token lifecycle
+│   │   │   └── AuthManager.java               # Deprecated (kept for compat)
 │   │   ├── config/
 │   │   │   └── SurrealDBDataStoreParams.java  # GeoServer param definitions
 │   │   ├── filter/
@@ -677,7 +698,7 @@ geoserver-surrealdb-connector/
 │   │       └── JtsToGeoJsonConverter.java     # JTS -> GeoJSON (for filters)
 │   ├── main/resources/META-INF/services/
 │   │   └── org.geotools.api.data.DataStoreFactorySpi
-│   └── test/java/org/geotools/data/surrealdb/  # 192 tests across 17 classes
+│   └── test/java/org/geotools/data/surrealdb/  # 264 tests (210 unit + 54 IT) across 23 classes
 ├── ARCHITECTURE.md
 ├── CLAUDE.md
 └── README.md
@@ -690,11 +711,11 @@ geoserver-surrealdb-connector/
 | Language | Java | 17+ (build with 21) |
 | Build System | Maven | 3.9+ |
 | GeoTools | gt-main, gt-api | 34.1 |
-| Database | SurrealDB | v2.2.1 (Java SDK 1.0.0-beta.1) |
+| Database | SurrealDB | v2.x / v3.x (pure HTTP, no SDK dependency) |
 | Geometry | JTS Core (LocationTech) | via GeoTools |
 | JSON | Gson | 2.11.0 |
 | Logging | SLF4J | via GeoTools |
-| Testing | JUnit 5 + Mockito | 5.10+ / 5.15+ |
+| Testing | JUnit 5 + Mockito + Testcontainers | 5.10+ / 5.15+ / 1.19+ |
 | Containerization | Docker Compose | - |
 | OGC Standards | WMS 1.3.0, WFS 2.0 | - |
 
@@ -702,12 +723,12 @@ geoserver-surrealdb-connector/
 
 | Decision | Rationale |
 |----------|-----------|
+| **Pure HTTP client** | All operations (connect, query, health check) use the HTTP `/sql` and `/health` endpoints with Basic auth. This avoids the JNI SDK's WebSocket `/rpc` protocol, which broke between SurrealDB v2.x and v3.x, and ensures the connector works with both versions. |
 | **HTTP REST API for queries** | The SurrealDB Java SDK's `Value.toString()` returns SurrealQL format (tuples, unquoted keys) which loses GeoJSON geometry structure. The HTTP `/sql` endpoint returns proper JSON with GeoJSON intact. |
-| **SDK for connection + auth only** | The JNI-based SDK handles connection lifecycle and JWT authentication, while all data queries go through HTTP for reliable JSON. |
-| **Root-then-Database signin** | `performSignin()` tries `Root` credential first, falls back to `Database`. Server root users can't authenticate with `Database`-scoped signin. |
+| **Basic auth on every request** | Eliminates JWT token lifecycle management. The `AuthManager` class is deprecated. |
 | **`surreal_ns` parameter key** | GeoServer reserves `namespace` for workspace URI. Renamed to `surreal_ns` to avoid collision. |
 | **Gson 2.11.0 override** | GeoServer ships `gson-2.3.1` which lacks `JsonParser.parseString()`. The newer Gson is required and replaces the bundled version. |
-| **SCHEMAFULL-only discovery** | Only SCHEMAFULL tables have typed field definitions. SCHEMALESS tables return empty field lists and are excluded. |
+| **SCHEMAFULL + SCHEMALESS discovery** | Both table types are discovered. Tables must have at least one `DEFINE FIELD ... TYPE geometry<X>` to be included. Sub-fields (dotted names) and computed `VALUE` fields are automatically filtered. |
 | **Parameterized queries via LET** | All literal values use `$p0`, `$p1`, ... bind parameters via `LET` statements to prevent SurrealQL injection. |
 
 ## License
